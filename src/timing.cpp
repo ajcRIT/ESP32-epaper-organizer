@@ -54,3 +54,19 @@ long timePeriod (struct tm *startTime, struct tm *endTime){
   long elapsedMins = (endSeconds-startSeconds)/60;
   return elapsedMins;
 }
+
+// Returns days between date1 and date2 (positive if date1 is before date2)
+int compareDates(struct tm date1, struct tm date2){
+  struct tm date1Strip = {0}; 
+  struct tm date2Strip = {0};
+  date1Strip.tm_mon = date1.tm_mon;
+  date1Strip.tm_mday =  date1.tm_mday;
+  date1Strip.tm_year =  date1.tm_year;
+  date2Strip.tm_mon = date2.tm_mon;
+  date2Strip.tm_mday =  date2.tm_mday;
+  date2Strip.tm_year =  date2.tm_year;
+  time_t date1Seconds = mktime(&date1Strip);
+  time_t date2Seconds = mktime(&date2Strip);
+  int elapsedDays = (date2Seconds-date1Seconds)/86400;
+  return elapsedDays;
+} 

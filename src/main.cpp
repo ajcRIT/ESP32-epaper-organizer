@@ -5,100 +5,10 @@
 #include <Fonts/FreeMonoBold12pt7b.h>
 #include <SPI.h>
 #include "time.h"
+#include "timing.hpp"
+#include "display_helpers.hpp"
+#include "config.hpp"
 
-const char* ssid = "REDDYLLC-CHESTER";
-const char* password = "Che$ter@29";
-String calScriptUrl = "https://script.google.com/macros/s/AKfycbzj14kizI2lhFPq-zensrILQ7Yl5KtXEMLRQ7hx_Z9xBKb1lRXeMzNhy-u_zq7ajdcs/exec";
-String taskScriptUrl = "https://script.google.com/macros/s/AKfycbzZznhWzbJWRDTH1w-YUr5-dbsYX-2nRXSFbxoc-nmNTirIczZRm85dHkb1alaoq6M_ng/exec";
-const char* tz_string = "EST5EDT,M3.2.0,M11.1.0";
-bool calendarDataLoaded = false;
-bool taskDataLoaded = false;
-const char* ntpServer = "pool.ntp.org";
-const long  gmtOffset_sec = -18000;    // EST is GMT -5 hours (-5 * 3600 = -18000)
-const int   daylightOffset_sec = 3600; // 1 hour daylight saving offset (in seconds)
-int taskYTracker = 85;
-int todayHeaderPrinted = 0;
-int tomorrowHeaderPrinted = 0;
-int laterHeaderPrinted = 0;
-
-// ----------- Pins -----------
-#define EPD_DC     6
-#define EPD_CS     22
-#define EPD_SCK    23
-#define EPD_MOSI   5
-#define EPD_RST     20
-#define EPD_BUSY    19
-#define ONBOARD_LED 15
-
-GxEPD2_BW<GxEPD2_583_T8, GxEPD2_583_T8::HEIGHT> display(GxEPD2_583_T8(EPD_CS, EPD_DC, EPD_RST, EPD_BUSY));
-
-
-
-// Robust UTC Time Conversion
-time_t convert_utc_tm_to_time_t(struct tm *tm) {
-char original_tz_buffer[64] = {0};
-char *original_tz = getenv("TZ");
-bool had_tz = false;
-if (original_tz) {
-had_tz = true;
-strncpy(original_tz_buffer, original_tz, sizeof(original_tz_buffer) - 1);
-}
-setenv("TZ", "UTC", 1);
-tzset();
-time_t utc_time = mktime(tm);
-if (had_tz) setenv("TZ", original_tz_buffer, 1);
-else unsetenv("TZ");
-tzset();
-return utc_time;
-}
-
-String removeAccents(String str) {
-  str.replace("é", "e");
-  str.replace("è", "e");
-  str.replace("ê", "e");
-  str.replace("à", "a");
-  str.replace("ç", "c");
-  return str;
-}
-
-int getBatteryPercent() {
-  int pin = 0;
-  analogReadResolution(12);
-  analogSetPinAttenuation((gpio_num_t)pin, ADC_11db);
-  int mv = analogReadMilliVolts(pin);
-  int batteryV = mv * 2;
-
-  int percent = map(batteryV, 3100, 4100, 0, 100);
-  return constrain(percent, 0, 100);
-}
-
-int printSmartWrap(String text, int x, int y, int maxChars, int _lineOffset) {
-  int currentPos = 0;
-  int lineOffset = 0;
-  int numLines = 0;
-  
-  while (currentPos < text.length()) {
-    String line = text.substring(currentPos, currentPos + maxChars);
-
-    if (currentPos + maxChars < text.length()) {
-      int lastSpace = line.lastIndexOf(' ');
-      if (lastSpace != -1) {
-        line = line.substring(0, lastSpace);
-        currentPos += (lastSpace + 1);
-      } else {
-        currentPos += maxChars;
-      }
-    } else {
-      currentPos += maxChars;
-    }
-    
-    display.setCursor(x, y + lineOffset);
-    display.print(line);
-    lineOffset += _lineOffset;
-    numLines++;
-  }
-  return numLines;
-}
 
 JsonDocument fetchCalendarData() {
   JsonDocument calendarJson;
@@ -160,66 +70,6 @@ JsonDocument fetchTaskData() {
   JsonDocument doc;
   deserializeJson(doc, "");
   return doc;
-}
-
-
-void drawDottedLineHorizontal (int x, int y, int length, int dashLength){
-  int cur_x = x;
-  do{
-    display.drawLine(cur_x, y, cur_x+dashLength, y, GxEPD_BLACK);
-    cur_x += (dashLength*2);
-  } while (cur_x < length);
-}
-
-void drawCheckMark (int x, int y, int size){
-  int pivotX = x + (size * 0.3);
-  int pivotY = y + (size * 0.8);
-  int endX = x + size;
-  int endY = y + (size * 0.2);
-
-  // Draw the short left-side downward stroke
-  display.drawLine(x, y + (size * 0.5), pivotX, pivotY, GxEPD_BLACK);
-  
-  // Draw the longer right-side upward stroke
-  display.drawLine(pivotX, pivotY, endX, endY, GxEPD_BLACK);
-}
-
-void drawChargeSymbol(int x, int y){
-  int x0 = x + 22, y0 = y + 3;  // Top point
-  int x1 = x + 14, y1 = y + 11; // Left-most point
-  int x2 = x + 20, y2 = y + 11; // Center line right point
-  display.fillTriangle(x0, y0, x1, y1, x2, y2, GxEPD_WHITE);
-
-  // Bottom Half of the Bolt
-  int x3 = x + 18, y3 = y + 9;  // Center line left point
-  int x4 = x + 24, y4 = y + 9;  // Right-most point
-  int x5 = x + 16, y5 = y + 17; // Bottom tip point
-  display.fillTriangle(x3, y3, x4, y4, x5, y5, GxEPD_WHITE);
-}
-
-void getTodaysDate(char* date, size_t dateSize) {
-  struct tm timeinfo;
-  if (!getLocalTime(&timeinfo)) {
-    Serial.println("Failed to obtain time");
-    strncpy(date, "No date", dateSize);
-    date[dateSize - 1] = '\0';  // ensure null-termination
-  } else {
-    strftime(date, dateSize, "%m-%d-%Y", &timeinfo);
-  }
-}
-
-void getTomorrowsDate(char* date, size_t dateSize) {
-  struct tm timeinfo;
-  if (!getLocalTime(&timeinfo)) {
-    Serial.println("Failed to obtain time");
-    strncpy(date, "No date", dateSize);
-    date[dateSize - 1] = '\0';  // ensure null-termination
-  } else {
-    time_t now = mktime(&timeinfo);      // convert struct tm -> time_t
-    now += 24 * 60 * 60;                  // add one day (in seconds)
-    struct tm* tomorrow = localtime(&now); // convert back to struct tm
-    strftime(date, dateSize, "%m-%d-%Y", tomorrow);
-  }
 }
 
 void drawOutline(){
@@ -285,21 +135,7 @@ void drawOutline(){
   do {
   } while (display.nextPage());
 }
-// Returns days between date1 and date2 (positive if date1 is before date2)
-int compareDates(struct tm date1, struct tm date2){
-  struct tm date1Strip = {0}; 
-  struct tm date2Strip = {0};
-  date1Strip.tm_mon = date1.tm_mon;
-  date1Strip.tm_mday =  date1.tm_mday;
-  date1Strip.tm_year =  date1.tm_year;
-  date2Strip.tm_mon = date2.tm_mon;
-  date2Strip.tm_mday =  date2.tm_mday;
-  date2Strip.tm_year =  date2.tm_year;
-  time_t date1Seconds = mktime(&date1Strip);
-  time_t date2Seconds = mktime(&date2Strip);
-  int elapsedDays = (date2Seconds-date1Seconds)/86400;
-  return elapsedDays;
-} 
+
 
 void printTask(String title, String due, bool done){
   int taskLocationX = 430;
@@ -382,14 +218,6 @@ void drawTask(JsonObject tasks, int index, int total){
     printTask(title, String(due), done);
     return;
   }
-}
-
-
-long timePeriod (struct tm *startTime, struct tm *endTime){
-  time_t startSeconds = mktime(startTime);
-  time_t endSeconds = mktime(endTime);
-  long elapsedMins = (endSeconds-startSeconds)/60;
-  return elapsedMins;
 }
 
 void drawTodo(JsonObject obj, int index, int total) {
