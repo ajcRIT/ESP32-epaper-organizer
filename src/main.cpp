@@ -406,11 +406,19 @@ void drawTodo(JsonObject obj, int index, int total) {
   time_t epoch = convert_utc_tm_to_time_t(&startTime);        // UTC struct -> UTC epoch (no offset applied)
   struct tm *local = localtime(&epoch);  // epoch -> local struct tm (DST-aware, uses configTime settings)
   float startTimeHour = local->tm_hour + local->tm_min / 60.0f;
+  if (local->tm_hour >= 20){ // Adjust the date if UTC offset put start time one day ahead
+    startTime.tm_mday -= 1;
+  }
   strftime(date, sizeof(date), "%m-%d-%Y", &startTime);
   char getdate [30];
   char tomorrow [30];
   getTodaysDate(getdate, sizeof(getdate));
   getTomorrowsDate(tomorrow, sizeof(tomorrow));
+  Serial.println(title);
+  Serial.println(local->tm_hour);
+  Serial.println(startTimeHour);
+  Serial.println(String(date));
+  Serial.println("");
 
   int blockLocationY = 75;
   int blockLocationX = 20;
@@ -421,21 +429,12 @@ void drawTodo(JsonObject obj, int index, int total) {
     float blockCalc = (float(length)/60)*25; 
     blockSize = ceil(blockCalc);
     blockWidth = 170;
-    Serial.println(title);
-    Serial.println(String(date));
-    Serial.println(String(length));
-    Serial.println(blockCalc);
-    Serial.println(blockSize);
-    Serial.println("");
+
   }else if (String(tomorrow) == String(date)){
     blockLocationY += (startTimeHour-7)*(25);
     blockLocationX += 190;
     blockSize = ceil(float(length)/60)*25;
     blockWidth = 180;
-    Serial.println(title);
-    Serial.println(String(date));
-    Serial.println(String(length));
-    Serial.println("");
   } else {
     return;
   }
