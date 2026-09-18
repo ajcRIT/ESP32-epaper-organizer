@@ -100,8 +100,8 @@ int printSmartWrap(String text, int x, int y, int maxChars, int _lineOffset) {
   return numLines;
 }
 
-DynamicJsonDocument fetchCalendarData() {
-  DynamicJsonDocument calendarJson (12000);
+JsonDocument fetchCalendarData() {
+  JsonDocument calendarJson;
   Serial.println("Fetching calendar data...");
   HTTPClient http;
   http.begin(calScriptUrl);
@@ -113,7 +113,7 @@ DynamicJsonDocument fetchCalendarData() {
       DeserializationError error = deserializeJson(calendarJson, payload);
       if (error) {
         calendarDataLoaded = false;
-        DynamicJsonDocument doc(1);
+        JsonDocument doc;
         deserializeJson(doc, payload);
         return doc;
       }
@@ -126,13 +126,13 @@ DynamicJsonDocument fetchCalendarData() {
   calendarDataLoaded = false;
   }
   http.end();
-  DynamicJsonDocument doc(1);
+  JsonDocument doc;
   deserializeJson(doc, "");
   return doc;
 }
 
-DynamicJsonDocument fetchTaskData() {
-  DynamicJsonDocument taskJson (12000);
+JsonDocument fetchTaskData() {
+  JsonDocument taskJson;
   Serial.println("Fetching task data...");
   HTTPClient http;
   http.begin(taskScriptUrl);
@@ -144,7 +144,7 @@ DynamicJsonDocument fetchTaskData() {
       DeserializationError error = deserializeJson(taskJson, payload);
       if (error) {
         taskDataLoaded = false;
-        DynamicJsonDocument doc(1);
+        JsonDocument doc;
         deserializeJson(doc, payload);
         return doc;
       }
@@ -157,7 +157,7 @@ DynamicJsonDocument fetchTaskData() {
   taskDataLoaded = false;
   }
   http.end();
-  DynamicJsonDocument doc(1);
+  JsonDocument doc;
   deserializeJson(doc, "");
   return doc;
 }
@@ -452,6 +452,10 @@ void drawTodo(JsonObject obj, int index, int total) {
 
 void setup() {
   Serial.begin(115200);
+
+  while (!Serial && millis() < 3000) {
+    delay(10);
+  }
   pinMode(ONBOARD_LED, OUTPUT);
   digitalWrite(ONBOARD_LED, LOW);
   delay(100);
@@ -489,9 +493,8 @@ void loop() {
   }
   digitalWrite(ONBOARD_LED, HIGH);
   drawOutline();
-  DynamicJsonDocument cal(12000);
-  DynamicJsonDocument task(12000);
-  cal = fetchCalendarData();
+  JsonDocument cal;
+  JsonDocument task;
   task = fetchTaskData();
   if (taskDataLoaded){
     JsonArray array = task.as<JsonArray>();
@@ -502,7 +505,11 @@ void loop() {
         current++;
       }
     }
+  } else {
+    Serial.println("HTTP Error fetching tasks");
+    return;
   }
+  cal = fetchCalendarData();
   if (calendarDataLoaded) {
     JsonArray array = cal.as<JsonArray>();
     if (array.size() > 0) {
@@ -513,7 +520,8 @@ void loop() {
       }
     }
   } else {
-    Serial.println("HTTP Error");
+    Serial.println("HTTP Error fetching calendar events");
+    return;
   }
   
   display.powerOff();
