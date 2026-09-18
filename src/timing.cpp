@@ -23,6 +23,13 @@ time_t convert_utc_tm_to_time_t(struct tm *tm) {
   return utc_time;
 }
 
+/***************************************************************
+* @brief gets today's date from local network
+* 
+* @param date: array of characters to store date string in
+*        dateSize: size of character array
+* @return void
+***************************************************************/
 void getTodaysDate(char* date, size_t dateSize) {
   struct tm timeinfo;
   if (!getLocalTime(&timeinfo)) {
@@ -34,6 +41,13 @@ void getTodaysDate(char* date, size_t dateSize) {
   }
 }
 
+/************************************************************
+* @brief get tomorrow's date from local network
+* 
+* @param date: array of characters to store date string in
+*        dateSize: size of character array
+* @return void
+**************************************************************/
 void getTomorrowsDate(char* date, size_t dateSize) {
   struct tm timeinfo;
   if (!getLocalTime(&timeinfo)) {
@@ -48,6 +62,14 @@ void getTomorrowsDate(char* date, size_t dateSize) {
   }
 }
 
+/************************************************************
+* @brief returns the amount of time in minutes between two 
+*        time structures
+* 
+* @param startTime: reference time
+*        endTime: end time
+* @return long: time in minutes between two entered times
+**************************************************************/
 long timePeriod (struct tm *startTime, struct tm *endTime){
   time_t startSeconds = mktime(startTime);
   time_t endSeconds = mktime(endTime);
@@ -56,6 +78,13 @@ long timePeriod (struct tm *startTime, struct tm *endTime){
 }
 
 // Returns days between date1 and date2 (positive if date1 is before date2)
+/************************************************************
+* @brief Compares the number of days between two dates
+* 
+* @param date1: reference date
+*        date2: end date
+* @return int: number of days between date1 and 2
+**************************************************************/
 int compareDates(struct tm date1, struct tm date2){
   struct tm date1Strip = {0}; 
   struct tm date2Strip = {0};
