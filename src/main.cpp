@@ -4,71 +4,83 @@
 #include <GxEPD2_BW.h>
 #include <Fonts/FreeMonoBold12pt7b.h>
 #include <SPI.h>
+#include <Arduino.h>
 #include "time.h"
 #include "timing.hpp"
 #include "display_helpers.hpp"
 #include "config.hpp"
 
+void print_wakeup_reason() {
+  esp_sleep_wakeup_cause_t wakeup_reason = esp_sleep_get_wakeup_cause();
+
+  switch(wakeup_reason) {
+    case ESP_SLEEP_WAKEUP_TIMER: 
+      Serial.println("Wakeup caused by timer (24-hour interval reached)."); 
+      break;
+    case ESP_SLEEP_WAKEUP_EXT1: // Changed from EXT0 to EXT1
+      Serial.println("Wakeup caused by external button press (ext1)."); 
+      break;
+    default: 
+      Serial.printf("Wakeup reason code: %d\n", wakeup_reason); 
+      break;
+  }
+}
 
 JsonDocument fetchCalendarData() {
   JsonDocument calendarJson;
+  JsonDocument doc;
   Serial.println("Fetching calendar data...");
   HTTPClient http;
   http.begin(calScriptUrl);
-  http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
+  http.setTimeout(20000);
+  http.setFollowRedirects(HTTPC_FORCE_FOLLOW_REDIRECTS);
   int httpCode = http.GET();
-  if (httpCode > 0) {
-    if (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY) {
+  calendarDataLoaded = false;
+  if (httpCode == HTTP_CODE_OK) {
       String payload = http.getString();
       DeserializationError error = deserializeJson(calendarJson, payload);
       if (error) {
-        calendarDataLoaded = false;
-        JsonDocument doc;
-        deserializeJson(doc, payload);
-        return doc;
+        Serial.println(error.c_str());
+        deserializeJson(doc, "");
       }
       else { 
         calendarDataLoaded = true;
         return calendarJson;
       }
-    }
   } else {
-  calendarDataLoaded = false;
+    Serial.println("No payload recieved");
+    deserializeJson(doc, "");
   }
   http.end();
-  JsonDocument doc;
-  deserializeJson(doc, "");
   return doc;
 }
 
 JsonDocument fetchTaskData() {
   JsonDocument taskJson;
+  JsonDocument doc;
   Serial.println("Fetching task data...");
   HTTPClient http;
   http.begin(taskScriptUrl);
-  http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
+  http.setTimeout(20000);
+  http.setFollowRedirects(HTTPC_FORCE_FOLLOW_REDIRECTS);
   int httpCode = http.GET();
-  if (httpCode > 0) {
-    if (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY) {
+  taskDataLoaded = false;
+  if (httpCode == HTTP_CODE_OK) {
       String payload = http.getString();
       DeserializationError error = deserializeJson(taskJson, payload);
       if (error) {
-        taskDataLoaded = false;
-        JsonDocument doc;
-        deserializeJson(doc, payload);
-        return doc;
+        Serial.println(error.c_str());
+        deserializeJson(doc, "");
       }
       else { 
         taskDataLoaded = true;
         return taskJson;
       }
-    }
   } else {
-  taskDataLoaded = false;
+    Serial.println("No payload recieved");
+    deserializeJson(doc, "");
   }
   http.end();
-  JsonDocument doc;
-  deserializeJson(doc, "");
   return doc;
 }
 
@@ -280,10 +292,11 @@ void drawTodo(JsonObject obj, int index, int total) {
 
 void setup() {
   Serial.begin(115200);
-
   while (!Serial && millis() < 3000) {
     delay(10);
   }
+
+  print_wakeup_reason();
   pinMode(ONBOARD_LED, OUTPUT);
   digitalWrite(ONBOARD_LED, LOW);
   delay(100);
@@ -299,10 +312,8 @@ void setup() {
   
   WiFi.begin(ssid, password);
   configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
-  configTzTime(tz_string, ntpServer);
-}
+  configTzTime(tz_string, ntpServer);\
 
-void loop() {
   taskYTracker = 85;
   todayHeaderPrinted = 0;
   tomorrowHeaderPrinted = 0;
@@ -353,5 +364,19 @@ void loop() {
   }
   
   display.powerOff();
-  delay(300000);
+  Serial.println("Going to sleep now...");
+  Serial.flush();
+
+  // 1. Configure Timer Wakeup (24 Hours)
+  esp_sleep_enable_timer_wakeup(TIME_TO_SLEEP);
+  // Create a 64-bit bitmask representing the REFRESH pin
+  uint64_t pin_bitmask = (1ULL << REFRESH);
+  // ESP_EXT1_WAKEUP_ALL_LOW wakes up when the pin hits GND
+  esp_sleep_enable_ext1_wakeup(pin_bitmask, ESP_EXT1_WAKEUP_ALL_LOW);
+  gpio_set_direction((gpio_num_t)REFRESH, GPIO_MODE_INPUT);
+  gpio_pullup_en((gpio_num_t)REFRESH);
+  gpio_pulldown_dis((gpio_num_t)REFRESH);
+
+  // Enter Deep Sleep
+  esp_deep_sleep_start();
 }

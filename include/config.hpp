@@ -13,6 +13,8 @@
 #define EPD_RST     20
 #define EPD_BUSY    19
 #define ONBOARD_LED 15
+#define REFRESH     4
+#define TIME_TO_SLEEP 86400000000ULL 
 
 // Wifi name and password
 inline const char* ssid = "REDDYLLC-CHESTER";
